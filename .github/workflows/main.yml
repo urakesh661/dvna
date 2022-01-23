@@ -1,0 +1,136 @@
+name: SAST scan on vulnerable Node JS project
+
+# Controls when the workflow will run
+on:
+  # Triggers the workflow on push request events but only for the master branch 
+  push:
+    branches: [ master ]
+
+jobs:
+ 
+  nodejsscan:
+    
+    runs-on: ubuntu-latest
+
+    steps:
+      
+      - name: Step 1 - Checkout main branch from GitHub
+        uses: actions/checkout@v2
+        
+      - name: Step 2 - Print working directory
+        run: echo $(pwd)  
+
+      - name: Step 3 - Node js scan
+        id: nodejsscan 
+        uses: ajinabraham/njsscan-action@v5
+        with:
+          args: '. --output njsscan_output.json || true'
+          
+      - name: Step 4 - Upload Node JS scan result
+        uses: actions/upload-artifact@v2
+        with:
+          name: Node JS Scan Report
+          path: njsscan_output.json
+          retention-days: 1
+          if-no-files-found: warn
+        
+          
+  retirejsscan:
+    
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [8.x]
+  
+    steps:
+      
+      - name: Step 1 - Checkout main branch from GitHub
+        uses: actions/checkout@v2
+   
+      - name: Step 2 - Set Node.js version ${{ matrix.node-version }}
+        uses: actions/setup-node@v2
+        with:
+          node-version: ${{ matrix.node-version }} 
+          
+      - name: Step 3 - Print working directory
+        run: echo $(pwd)    
+        
+      - name: Step 4 - Run retirejs scan
+        run: |
+          npm install
+          npm install -g retire
+          retire --version
+          retire --outputformat json --outputpath retirejs.json || true
+          
+      - name: step 5 - Upload retirejs scan report
+        uses: actions/upload-artifact@v2
+        with:
+          name: Retire JS Scan Report 
+          path: retirejs.json 
+          retention-days: 1
+          if-no-files-found: warn
+          
+  trufflehogscan:
+    
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest]
+        python-version: ['3.6']
+      
+    steps:
+      - name: Step 1 - Checkout main branch from GitHub
+        uses: actions/checkout@v2
+      
+      - name: Step 2 - Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: ${{ matrix.python-version }}
+      
+      - name: Step 3 -  Install truffle Hog
+        run: pip3 install trufflehog
+        
+      - name: Step 4 - Print working directory
+        run: echo $(pwd)  
+        
+      - name: Step 5 -  Run truffle Hog
+        run: |
+             trufflehog . --json > trufflehog_output.json || true
+             echo Reading trufflehog scan file.
+             cat trufflehog_output.json
+             
+      - name: Step 6 -  Filter truffle output
+        run: |
+             cat output.json  | jq '.stringsFound'
+             
+      - name: Step 7 - Upload trufflehog scan result
+        uses: actions/upload-artifact@v2
+        with:
+          name: Trufflehog Scan Report
+          path: trufflehog_output.json
+          retention-days: 1
+          if-no-files-found: warn 
+           
+  insider:
+  
+        runs-on: ubuntu-latest
+        steps:
+        
+        - name: Step 1 - Checkout
+          uses: actions/checkout@v2
+        
+        - name: Step 2 - Run Insider
+          run: |
+               wget https://github.com/insidersec/insider/releases/download/2.1.0/insider_2.1.0_linux_x86_64.tar.gz
+               tar -xf insider_2.1.0_linux_x86_64.tar.gz 
+               chmod +x insider
+               ./insider --tech javascript -v --target . > insider_output.json
+               
+        - name: Step 3 - Upload insider scan result
+          uses: actions/upload-artifact@v2
+          with:
+            name: Insider Scan Report
+            path: insider_output.json
+            retention-days: 1
+            if-no-files-found: warn      
+            
